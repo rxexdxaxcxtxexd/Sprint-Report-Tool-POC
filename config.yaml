@@ -1,0 +1,20 @@
+jira:
+  default_board_id: 38
+  default_project: BOPS
+  boards:
+    38:
+      name: "BOPS Board"
+      project: BOPS
+      url: "https://csgsolutions.atlassian.net/jira/software/c/projects/BOPS/boards/38"
+
+fathom:
+  base_url: "https://api.fathom.video/v1"
+
+sprint_report:
+  guide_path: "C:\\Users\\layden\\Downloads\\CSG_Customer_Status_Report_Guide.docx"
+  output_dir: "output"
+  pdf_retention_hours: 24
+
+email:
+  from_address: "sprint-reports@csgsolutions.com"
+  subject_template: "Sprint {sprint_id} Report - {sprint_name}"

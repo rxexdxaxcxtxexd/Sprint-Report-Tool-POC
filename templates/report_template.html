@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprint Report - {{ metadata.sprint_name or 'Sprint Report' }}</title>
+    <style>
+        /* =====================================================
+           PDF Report Template - Professional Business Style
+           ===================================================== */
+
+        /* Page Setup */
+        @page {
+            size: letter; /* 8.5in x 11in */
+            margin: 1in;
+
+            @top-center {
+                content: "Sprint Report: {{ metadata.sprint_id or 'N/A' }}";
+                font-family: 'Calibri', 'Arial', sans-serif;
+                font-size: 10pt;
+                color: #666;
+                padding-bottom: 10px;
+                border-bottom: 1px solid #e0e0e0;
+            }
+
+            @bottom-center {
+                content: "Page " counter(page) " of " counter(pages);
+                font-family: 'Calibri', 'Arial', sans-serif;
+                font-size: 9pt;
+                color: #666;
+                padding-top: 10px;
+                border-top: 1px solid #e0e0e0;
+            }
+
+            @bottom-left {
+                content: "{{ metadata.company_name or 'Cornerstone Solutions Group' }}";
+                font-family: 'Calibri', 'Arial', sans-serif;
+                font-size: 9pt;
+                color: #666;
+            }
+
+            @bottom-right {
+                content: "Generated: {{ generation_date }}";
+                font-family: 'Calibri', 'Arial', sans-serif;
+                font-size: 9pt;
+                color: #666;
+            }
+        }
+
+        /* Body Styles */
+        body {
+            font-family: 'Calibri', 'Arial', 'Helvetica', sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Headings */
+        h1 {
+            color: #0066cc;
+            font-size: 24pt;
+            font-weight: bold;
+            margin-top: 0;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #0066cc;
+            page-break-after: avoid;
+        }
+
+        h2 {
+            color: #0066cc;
+            font-size: 18pt;
+            font-weight: bold;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            page-break-after: avoid;
+        }
+
+        h3 {
+            color: #333;
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 20px;
+            margin-bottom: 10px;
+            page-break-after: avoid;
+        }
+
+        h4, h5, h6 {
+            color: #333;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 8px;
+            page-break-after: avoid;
+        }
+
+        /* Paragraphs */
+        p {
+            margin: 0 0 12px 0;
+            text-align: justify;
+        }
+
+        /* Lists */
+        ul, ol {
+            margin: 12px 0;
+            padding-left: 25px;
+        }
+
+        li {
+            margin-bottom: 6px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            page-break-inside: avoid;
+            font-size: 10pt;
+        }
+
+        thead {
+            background-color: #0066cc;
+            color: white;
+        }
+
+        th {
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+            border: 1px solid #0066cc;
+        }
+
+        td {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tbody tr:hover {
+            background-color: #f0f0f0;
+        }
+
+        /* Code Blocks */
+        code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 10pt;
+            color: #c7254e;
+        }
+
+        pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-left: 4px solid #0066cc;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 20px 0;
+            page-break-inside: avoid;
+        }
+
+        pre code {
+            background-color: transparent;
+            padding: 0;
+            color: #333;
+        }
+
+        /* Blockquotes */
+        blockquote {
+            border-left: 4px solid #0066cc;
+            padding-left: 20px;
+            margin: 20px 0;
+            color: #555;
+            font-style: italic;
+            background-color: #f9f9f9;
+            padding: 15px 20px;
+            page-break-inside: avoid;
+        }
+
+        /* Links */
+        a {
+            color: #0066cc;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        /* Horizontal Rules */
+        hr {
+            border: none;
+            border-top: 2px solid #e0e0e0;
+            margin: 30px 0;
+        }
+
+        /* Report Header Section */
+        .report-header {
+            background: linear-gradient(135deg, #0066cc 0%, #004999 100%);
+            color: white;
+            padding: 30px;
+            margin: -1in -1in 30px -1in;
+            page-break-after: avoid;
+        }
+
+        .report-header h1 {
+            color: white;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            margin: 0 0 20px 0;
+            padding-bottom: 15px;
+        }
+
+        .report-metadata {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metadata-item {
+            background-color: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        .metadata-label {
+            font-weight: bold;
+            font-size: 9pt;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .metadata-value {
+            font-size: 12pt;
+            font-weight: bold;
+        }
+
+        /* Report Content */
+        .report-content {
+            margin-top: 20px;
+        }
+
+        /* Page Break Controls */
+        .page-break-before {
+            page-break-before: always;
+        }
+
+        .page-break-after {
+            page-break-after: always;
+        }
+
+        .no-page-break {
+            page-break-inside: avoid;
+        }
+
+        /* Print-specific styles */
+        @media print {
+            body {
+                background: white;
+            }
+
+            .no-print {
+                display: none;
+            }
+        }
+
+        /* Status Badges */
+        .badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 9pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge-success {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+
+        .badge-danger {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .badge-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        /* Highlights */
+        .highlight {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+            page-break-inside: avoid;
+        }
+
+        .highlight-success {
+            background-color: #d4edda;
+            border-left-color: #28a745;
+        }
+
+        .highlight-danger {
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
+        }
+
+        /* Summary Box */
+        .summary-box {
+            background-color: #f8f9fa;
+            border: 2px solid #0066cc;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+            page-break-inside: avoid;
+        }
+
+        .summary-box h3 {
+            margin-top: 0;
+            color: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <!-- Report Header -->
+    <div class="report-header">
+        <h1>{{ metadata.sprint_name or 'Sprint Report' }}</h1>
+
+        <div class="report-metadata">
+            <div class="metadata-item">
+                <div class="metadata-label">Sprint ID</div>
+                <div class="metadata-value">{{ metadata.sprint_id or 'N/A' }}</div>
+            </div>
+
+            <div class="metadata-item">
+                <div class="metadata-label">Sprint Period</div>
+                <div class="metadata-value">
+                    {{ metadata.start_date or 'N/A' }} - {{ metadata.end_date or 'N/A' }}
+                </div>
+            </div>
+
+            <div class="metadata-item">
+                <div class="metadata-label">Team</div>
+                <div class="metadata-value">{{ metadata.team_name or 'N/A' }}</div>
+            </div>
+
+            <div class="metadata-item">
+                <div class="metadata-label">Report Generated</div>
+                <div class="metadata-value">{{ generation_date }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Report Content -->
+    <div class="report-content">
+        {{ report_content | safe }}
+    </div>
+
+    <!-- Footer Note (optional) -->
+    {% if metadata.footer_note %}
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #e0e0e0; color: #666; font-size: 9pt; text-align: center;">
+        {{ metadata.footer_note }}
+    </div>
+    {% endif %}
+</body>
+</html>

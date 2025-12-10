@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sprint Report Approval - {{ metadata.sprint_name or 'Sprint Report' }}</title>
+    <style>
+        /* =====================================================
+           Approval Form - Modern Interactive UI
+           ===================================================== */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            animation: slideUp 0.5s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #0066cc 0%, #004999 100%);
+            color: white;
+            padding: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .metadata-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .metadata-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 12px;
+            border-radius: 6px;
+            backdrop-filter: blur(10px);
+        }
+
+        .metadata-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .metadata-value {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 30px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            color: #333;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        /* Report Preview */
+        .report-preview {
+            background: #f8f9fa;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 25px;
+            max-height: 600px;
+            overflow-y: auto;
+            margin-bottom: 30px;
+            font-family: 'Calibri', 'Arial', sans-serif;
+            line-height: 1.6;
+        }
+
+        /* Scrollbar Styling */
+        .report-preview::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .report-preview::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 5px;
+        }
+
+        .report-preview::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 5px;
+        }
+
+        .report-preview::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Report Content Styles */
+        .report-preview h1 {
+            color: #0066cc;
+            font-size: 24px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #0066cc;
+        }
+
+        .report-preview h2 {
+            color: #0066cc;
+            font-size: 20px;
+            margin-top: 25px;
+            margin-bottom: 12px;
+        }
+
+        .report-preview h3 {
+            color: #333;
+            font-size: 16px;
+            margin-top: 20px;
+            margin-bottom: 10px;
+        }
+
+        .report-preview p {
+            margin-bottom: 12px;
+            color: #333;
+        }
+
+        .report-preview ul, .report-preview ol {
+            margin: 12px 0;
+            padding-left: 25px;
+        }
+
+        .report-preview li {
+            margin-bottom: 6px;
+        }
+
+        .report-preview table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+            font-size: 14px;
+        }
+
+        .report-preview thead {
+            background-color: #0066cc;
+            color: white;
+        }
+
+        .report-preview th {
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .report-preview td {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+        }
+
+        .report-preview tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        .report-preview code {
+            background-color: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            color: #c7254e;
+        }
+
+        .report-preview pre {
+            background-color: #f4f4f4;
+            padding: 15px;
+            border-left: 4px solid #0066cc;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+
+        .report-preview blockquote {
+            border-left: 4px solid #0066cc;
+            padding-left: 20px;
+            margin: 20px 0;
+            color: #555;
+            font-style: italic;
+            background-color: #f9f9f9;
+            padding: 15px 20px;
+        }
+
+        /* Action Buttons */
+        .actions {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            padding: 30px;
+            background: #f8f9fa;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(0) scale(1);
+        }
+
+        .btn-approve {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+
+        .btn-approve:hover {
+            background: linear-gradient(135deg, #20c997 0%, #28a745 100%);
+        }
+
+        .btn-reject {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+        }
+
+        .btn-reject:hover {
+            background: linear-gradient(135deg, #c82333 0%, #dc3545 100%);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Status Message */
+        .status-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            font-weight: 600;
+            display: none;
+            animation: slideIn 0.3s ease-out;
+            z-index: 1000;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            border-left: 4px solid #28a745;
+        }
+
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border-left: 4px solid #dc3545;
+        }
+
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border-left: 4px solid #17a2b8;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .actions {
+                flex-direction: column;
+            }
+
+            .btn {
+                width: 100%;
+            }
+
+            .metadata-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Status Message (hidden by default) -->
+    <div id="statusMessage" class="status-message"></div>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>Sprint Report Approval</h1>
+            <div class="metadata-grid">
+                <div class="metadata-item">
+                    <div class="metadata-label">Sprint ID</div>
+                    <div class="metadata-value">{{ metadata.sprint_id or 'N/A' }}</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Sprint Name</div>
+                    <div class="metadata-value">{{ metadata.sprint_name or 'N/A' }}</div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Sprint Period</div>
+                    <div class="metadata-value">
+                        {{ metadata.start_date or 'N/A' }} - {{ metadata.end_date or 'N/A' }}
+                    </div>
+                </div>
+                <div class="metadata-item">
+                    <div class="metadata-label">Generated</div>
+                    <div class="metadata-value">{{ generation_date }}</div>
+                </div>
+                {% if metadata.job_id %}
+                <div class="metadata-item">
+                    <div class="metadata-label">Job ID</div>
+                    <div class="metadata-value">{{ metadata.job_id }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Content -->
+        <div class="content">
+            <h2 class="section-title">Report Preview</h2>
+            <div class="report-preview" id="reportPreview">
+                {{ report_content | safe }}
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="actions">
+            <button class="btn btn-approve" id="approveBtn" onclick="approveReport()">
+                <span></span>
+                <span>Approve & Send Report</span>
+            </button>
+            <button class="btn btn-reject" id="rejectBtn" onclick="rejectReport()">
+                <span></span>
+                <span>Reject Report</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const WEBHOOK_URL = "{{ webhook_url or '' }}";
+        const JOB_ID = "{{ metadata.job_id or '' }}";
+        const SPRINT_ID = "{{ metadata.sprint_id or '' }}";
+
+        /**
+         * Show status message to user
+         */
+        function showStatus(message, type = 'info') {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message ${type}`;
+            statusEl.style.display = 'block';
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        /**
+         * Disable action buttons during processing
+         */
+        function setButtonsDisabled(disabled) {
+            document.getElementById('approveBtn').disabled = disabled;
+            document.getElementById('rejectBtn').disabled = disabled;
+        }
+
+        /**
+         * Send decision to webhook
+         */
+        async function sendDecision(approved, rejectionReason = null) {
+            if (!WEBHOOK_URL) {
+                alert('Error: Webhook URL not configured. Cannot submit approval decision.');
+                console.error('WEBHOOK_URL is not set');
+                return false;
+            }
+
+            const payload = {
+                job_id: JOB_ID,
+                sprint_id: SPRINT_ID,
+                approved: approved,
+                timestamp: new Date().toISOString(),
+                rejection_reason: rejectionReason
+            };
+
+            try {
+                showStatus('Submitting decision...', 'info');
+                setButtonsDisabled(true);
+
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const result = await response.json();
+                console.log('Webhook response:', result);
+
+                return true;
+
+            } catch (error) {
+                console.error('Failed to send decision:', error);
+                showStatus(`Error: ${error.message}`, 'error');
+                setButtonsDisabled(false);
+                return false;
+            }
+        }
+
+        /**
+         * Handle report approval
+         */
+        async function approveReport() {
+            // Confirmation dialog
+            const confirmed = confirm(
+                'Are you sure you want to APPROVE this sprint report?\n\n' +
+                'This will send the report to stakeholders.'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Send approval
+            const success = await sendDecision(true);
+
+            if (success) {
+                showStatus(' Report approved successfully!', 'success');
+
+                // Close window after short delay
+                setTimeout(() => {
+                    alert('Report approved and sent. This window will now close.');
+                    window.close();
+                }, 2000);
+            }
+        }
+
+        /**
+         * Handle report rejection
+         */
+        async function rejectReport() {
+            // Get rejection reason
+            const reason = prompt(
+                'Please provide a reason for rejecting this report:\n\n' +
+                '(This is optional but helps the team understand what needs improvement)'
+            );
+
+            // User cancelled
+            if (reason === null) {
+                return;
+            }
+
+            // Confirmation dialog
+            const confirmed = confirm(
+                'Are you sure you want to REJECT this sprint report?\n\n' +
+                'The report will not be sent and the team will be notified.'
+            );
+
+            if (!confirmed) {
+                return;
+            }
+
+            // Send rejection
+            const success = await sendDecision(false, reason || 'No reason provided');
+
+            if (success) {
+                showStatus('Report rejected. Team has been notified.', 'info');
+
+                // Close window after short delay
+                setTimeout(() => {
+                    alert('Report rejection recorded. This window will now close.');
+                    window.close();
+                }, 2000);
+            }
+        }
+
+        /**
+         * Keyboard shortcuts
+         */
+        document.addEventListener('keydown', (event) => {
+            // Ctrl+Enter or Cmd+Enter = Approve
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                approveReport();
+            }
+
+            // Esc = Reject
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                rejectReport();
+            }
+        });
+
+        /**
+         * Log configuration on load
+         */
+        window.addEventListener('load', () => {
+            console.log('Sprint Report Approval Form Loaded');
+            console.log('Job ID:', JOB_ID || 'Not set');
+            console.log('Sprint ID:', SPRINT_ID || 'Not set');
+            console.log('Webhook URL:', WEBHOOK_URL ? 'Configured' : 'NOT CONFIGURED');
+
+            if (!WEBHOOK_URL) {
+                showStatus('Warning: Webhook URL not configured!', 'error');
+            }
+        });
+
+        /**
+         * Prevent accidental window close
+         */
+        window.addEventListener('beforeunload', (event) => {
+            // Only show warning if buttons are still enabled (decision not made)
+            if (!document.getElementById('approveBtn').disabled) {
+                event.preventDefault();
+                event.returnValue = 'You have not approved or rejected this report yet. Are you sure you want to leave?';
+                return event.returnValue;
+            }
+        });
+    </script>
+</body>
+</html>

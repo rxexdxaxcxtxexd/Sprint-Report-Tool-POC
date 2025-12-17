@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ metadata.sprint_name or 'Sprint Report' }}</title>
+    <style>
+        /* =====================================================
+           CSG Sprint Report Template - iBOPS FY25 Style
+           ===================================================== */
+
+        @page {
+            size: letter;
+            margin: 0.75in 0.75in 1in 0.75in;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Calibri', 'Arial', 'Helvetica', sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #333;
+            background: white;
+            position: relative;
+        }
+
+        /* CSG Branding Colors */
+        :root {
+            --csg-green: #4CAF50;
+            --csg-lime: #C5D952;
+            --csg-dark-green: #3D8B40;
+            --text-dark: #333333;
+            --text-medium: #666666;
+        }
+
+        /* Header with Logo */
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 30px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-circles {
+            display: flex;
+            gap: 0px;
+            align-items: center;
+            position: relative;
+            width: 50px;
+            height: 30px;
+        }
+
+        .logo-circle {
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        /* Left large green circle */
+        .logo-circle:nth-child(1) {
+            width: 20px;
+            height: 20px;
+            background: var(--csg-green);
+            left: 0;
+            top: 5px;
+        }
+
+        /* Center small lime circle (connecting node) */
+        .logo-circle:nth-child(2) {
+            width: 10px;
+            height: 10px;
+            background: var(--csg-lime);
+            left: 16px;
+            top: 10px;
+            z-index: 2;
+        }
+
+        /* Right medium green circle */
+        .logo-circle:nth-child(3) {
+            width: 16px;
+            height: 16px;
+            background: var(--csg-green);
+            left: 22px;
+            top: 0;
+        }
+
+        /* Connection lines between circles */
+        .logo-circles::before,
+        .logo-circles::after {
+            content: '';
+            position: absolute;
+            height: 3px;
+            background: var(--csg-green);
+            z-index: 1;
+        }
+
+        .logo-circles::before {
+            width: 8px;
+            left: 15px;
+            top: 14px;
+        }
+
+        .logo-circles::after {
+            width: 8px;
+            left: 23px;
+            top: 10px;
+            transform: rotate(-20deg);
+            transform-origin: left center;
+        }
+
+        .logo-text {
+            font-size: 32pt;
+            font-weight: bold;
+            color: #333;
+            letter-spacing: -1px;
+        }
+
+        .logo-tagline {
+            font-size: 8pt;
+            color: var(--text-medium);
+            margin-left: 5px;
+        }
+
+        /* Decorative Blob Shapes */
+        .blob-container {
+            position: absolute;
+            top: 0;
+            right: -50px;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .blob {
+            position: absolute;
+            border-radius: 50% 40% 60% 45%;
+            opacity: 0.95;
+        }
+
+        .blob-green-large {
+            background: var(--csg-green);
+            width: 450px;
+            height: 450px;
+            top: -50px;
+            right: -100px;
+            border-radius: 63% 37% 54% 46% / 55% 48% 52% 45%;
+        }
+
+        .blob-lime-small {
+            background: var(--csg-lime);
+            width: 120px;
+            height: 120px;
+            top: 20px;
+            right: 100px;
+            border-radius: 45% 55% 60% 40% / 50% 60% 40% 50%;
+        }
+
+        /* Main Content */
+        .content {
+            position: relative;
+            z-index: 5;
+            max-width: 7in;
+        }
+
+        /* Title Section */
+        .report-title {
+            font-size: 20pt;
+            font-weight: bold;
+            color: var(--text-dark);
+            margin-bottom: 5px;
+        }
+
+        .report-subtitle {
+            font-size: 18pt;
+            font-weight: bold;
+            color: var(--text-dark);
+            margin-bottom: 25px;
+        }
+
+        /* Section Headers */
+        h2 {
+            color: var(--csg-green);
+            font-size: 14pt;
+            font-weight: bold;
+            margin-top: 25px;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        h3 {
+            color: var(--csg-green);
+            font-size: 12pt;
+            font-weight: bold;
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+
+        /* Bullet Lists */
+        ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        /* JIRA Ticket References */
+        .jira-ref {
+            font-weight: 600;
+            color: var(--csg-dark-green);
+        }
+
+        /* Epic References */
+        .epic-ref {
+            font-style: italic;
+            color: var(--text-medium);
+        }
+
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0 25px 0;
+            font-size: 10pt;
+        }
+
+        th {
+            background: var(--csg-green);
+            color: white;
+            padding: 10px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            vertical-align: top;
+        }
+
+        tr:nth-child(even) {
+            background: #f9f9f9;
+        }
+
+        /* Footer */
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 0.5in;
+            background: var(--csg-lime);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding: 0 0.75in;
+            z-index: 100;
+        }
+
+        .footer-text {
+            color: var(--csg-dark-green);
+            font-size: 9pt;
+            text-align: right;
+            line-height: 1.4;
+            font-weight: normal;
+        }
+
+        .footer-phone {
+            font-weight: bold;
+            font-size: 9pt;
+        }
+
+        .footer-website {
+            color: var(--csg-green);
+            text-decoration: none;
+            font-weight: normal;
+        }
+
+        .footer-address {
+            font-size: 8pt;
+            color: var(--csg-dark-green);
+        }
+
+        /* Page Break Control */
+        .page-break {
+            page-break-after: always;
+        }
+
+        .avoid-break {
+            page-break-inside: avoid;
+        }
+
+        /* Cover Page Styling */
+        .cover-page {
+            min-height: 100vh;
+            page-break-after: always;
+            position: relative;
+        }
+
+        /* Content Pages Styling */
+        .content-pages {
+            position: relative;
+            page-break-after: always;
+        }
+
+        /* Content pages should have smaller blob in corner only */
+        .content-pages .blob-container {
+            display: none; /* Hide the main page blobs from content pages */
+        }
+
+        /* Add small lime blob to content pages */
+        .content-pages::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 150px;
+            height: 150px;
+            background: var(--csg-lime);
+            border-radius: 50% 40% 60% 45%;
+            opacity: 0.95;
+            pointer-events: none;
+        }
+
+        /* Back Cover Styling */
+        .back-cover {
+            min-height: 100vh;
+            position: relative;
+            page-break-before: always;
+        }
+
+        .back-blobs .blob-back-green {
+            background: var(--csg-green);
+            width: 600px;
+            height: 600px;
+            top: -100px;
+            left: -150px;
+            border-radius: 58% 42% 48% 52% / 62% 58% 42% 38%;
+        }
+
+        .back-blobs .blob-back-lime {
+            background: var(--csg-lime);
+            width: 250px;
+            height: 250px;
+            top: 100px;
+            right: 50px;
+            border-radius: 35% 65% 58% 42% / 48% 35% 65% 52%;
+        }
+
+        /* Spacing */
+        .section {
+            margin-bottom: 20px;
+        }
+
+        /* Strong/Bold Text */
+        strong {
+            font-weight: 600;
+            color: var(--text-dark);
+        }
+
+        /* Arrows and Symbols */
+        .arrow {
+            color: var(--csg-green);
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Decorative Blobs -->
+    <div class="blob-container">
+        <div class="blob blob-green-large"></div>
+        <div class="blob blob-lime-small"></div>
+    </div>
+
+    <!-- Header with CSG Logo -->
+    <div class="header">
+        <div class="logo-container">
+            <div class="logo-circles">
+                <div class="logo-circle"></div>
+                <div class="logo-circle"></div>
+                <div class="logo-circle"></div>
+            </div>
+            <span class="logo-text">csg</span>
+        </div>
+    </div>
+    <div style="margin-left: 50px; margin-top: -10px; margin-bottom: 30px;">
+        <span class="logo-tagline">igniting data · empowering people</span>
+    </div>
+
+    <!-- Cover Page -->
+    <div class="cover-page">
+        <!-- Cover page has just the logo and blobs, no content -->
+    </div>
+
+    <!-- Content Pages -->
+    <div class="content-pages">
+        <div class="content">
+            <!-- Title -->
+            <div class="report-title">{{ metadata.team_name or 'iBOPS FY25 Agile Team' }}</div>
+            <div class="report-subtitle">{{ metadata.sprint_name or 'Sprint Report' }} ({{ metadata.sprint_dates or 'Date Range' }})</div>
+
+            <!-- Report Body - Use |safe to prevent HTML escaping -->
+            {{ report_content|safe }}
+        </div>
+    </div>
+
+    <!-- Back Cover -->
+    <div class="back-cover">
+        <!-- Decorative blobs for back cover -->
+        <div class="blob-container back-blobs">
+            <div class="blob blob-back-green"></div>
+            <div class="blob blob-back-lime"></div>
+        </div>
+    </div>
+
+    <!-- Footer (appears on all pages) -->
+    <div class="footer">
+        <div class="footer-text">
+            <div class="footer-phone">314.469.9910</div>
+            <div><a href="https://csgsolutions.com" class="footer-website">csgsolutions.com</a></div>
+            <div class="footer-address">12647 olive blvd., suite 560<br>st. louis, mo 63141</div>
+        </div>
+    </div>
+</body>
+</html>

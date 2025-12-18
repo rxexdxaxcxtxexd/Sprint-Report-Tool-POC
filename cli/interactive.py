@@ -14,7 +14,8 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import sys
 
-from cli.jira_mcp import JiraMCPClient, Sprint, Issue, JiraMCPError
+from cli.jira_mcp import JiraMCPClient, Sprint, Issue
+from utils.exceptions import JiraMCPError
 from cli.transcript_filter import filter_transcripts_smart, parse_selection, FilteredTranscript
 from utils.config import Config
 

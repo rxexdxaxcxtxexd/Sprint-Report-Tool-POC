@@ -18,7 +18,7 @@ import logging
 from typing import Any, Dict
 from pydantic import ValidationError
 
-from cli.jira_mcp import JiraMCPError
+from utils.exceptions import JiraMCPError
 from utils.mcp_models import MCPResponse, SprintData, IssueData
 
 

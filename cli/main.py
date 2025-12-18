@@ -93,110 +93,111 @@ For more information, see README.md
             console.print("[yellow]Continuing anyway - JIRA MCP may fail[/yellow]")
         # Initialize clients
         console.print("[dim]Initializing JIRA MCP client...[/dim]")
-        jira_client = JiraMCPClient(
+        with JiraMCPClient(
             jira_url=config.jira.url,
             jira_username=config.jira.username,
             jira_api_token=config.jira.api_token
-        )
+        ) as jira_client:
 
-        console.print("[dim]Initializing Fathom client...[/dim]")
-        fathom_client = FathomClient(api_key=config.fathom.api_key)
+            console.print("[dim]Initializing Fathom client...[/dim]")
+            fathom_client = FathomClient(api_key=config.fathom.api_key)
 
-        # Step 1: Select Sprint
-        sprint = select_sprint_interactive(jira_client, board_id)
+            # Step 1: Select Sprint
+            sprint = select_sprint_interactive(jira_client, board_id)
 
-        # Step 2: Confirm Dates
-        dates = confirm_sprint_dates_interactive(sprint)
+            # Step 2: Confirm Dates
+            dates = confirm_sprint_dates_interactive(sprint)
 
-        # Step 3: Fetch Sprint Data
-        console.print("\n[bold cyan]Step 3: Fetching Sprint Data[/bold cyan]")
-        from rich.progress import Progress, TextColumn
+            # Step 3: Fetch Sprint Data
+            console.print("\n[bold cyan]Step 3: Fetching Sprint Data[/bold cyan]")
+            from rich.progress import Progress, TextColumn
 
-        with Progress(
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("Loading sprint issues...", total=None)
+            with Progress(
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("Loading sprint issues...", total=None)
+
+                try:
+                    issues = jira_client.get_sprint_issues(sprint.id)
+                    progress.update(task, completed=True)
+                    console.print(f"[green]OK Loaded {len(issues)} issues[/green]")
+                except Exception as e:
+                    progress.stop()
+                    console.print(f"[red]Error loading issues: {e}[/red]")
+                    sys.exit(1)
+
+            # Step 4: Select Transcripts
+            transcripts = select_transcripts_interactive(fathom_client, dates, config)
+
+            # Step 5: Generate Report with Claude
+            console.print("\n[bold cyan]Step 5: Generating Report with Claude[/bold cyan]")
+            console.print("[dim]This may take 30-60 seconds...[/dim]")
+
+            # Import here to avoid loading heavy dependencies unless needed
+            from services.report_generator import generate_sprint_report
 
             try:
-                issues = jira_client.get_sprint_issues(sprint.id)
-                progress.update(task, completed=True)
-                console.print(f"[green]OK Loaded {len(issues)} issues[/green]")
+                report_markdown = generate_sprint_report(
+                    sprint=sprint,
+                    issues=issues,
+                    transcripts=transcripts,
+                    config=config
+                )
+                console.print("[green]OK Report generated[/green]")
             except Exception as e:
-                progress.stop()
-                console.print(f"[red]Error loading issues: {e}[/red]")
+                console.print(f"[red]Error generating report: {e}[/red]")
                 sys.exit(1)
 
-        # Step 4: Select Transcripts
-        transcripts = select_transcripts_interactive(fathom_client, dates, config)
+            # Step 6: Review Report
+            final_report = review_report_interactive(report_markdown)
 
-        # Step 5: Generate Report with Claude
-        console.print("\n[bold cyan]Step 5: Generating Report with Claude[/bold cyan]")
-        console.print("[dim]This may take 30-60 seconds...[/dim]")
+            # Step 7: Generate PDF
+            console.print("\n[bold cyan]Step 6: Creating PDF[/bold cyan]")
 
-        # Import here to avoid loading heavy dependencies unless needed
-        from services.report_generator import generate_sprint_report
+            from services.pdf_generator import generate_pdf_report
+            from utils.filename_utils import generate_report_filename
 
-        try:
-            report_markdown = generate_sprint_report(
-                sprint=sprint,
-                issues=issues,
-                transcripts=transcripts,
-                config=config
-            )
-            console.print("[green]OK Report generated[/green]")
-        except Exception as e:
-            console.print(f"[red]Error generating report: {e}[/red]")
-            sys.exit(1)
+            try:
+                # Generate safe filename
+                filename = generate_report_filename(sprint.name, sprint.id)
+                pdf_path = config.output.pdf_dir / filename
 
-        # Step 6: Review Report
-        final_report = review_report_interactive(report_markdown)
+                # Generate PDF
+                generate_pdf_report(
+                    markdown_content=final_report,
+                    output_path=pdf_path,
+                    template_path=config.report.template_path,
+                    metadata={
+                        'sprint_name': sprint.name,
+                        'sprint_id': sprint.id,
+                        'team_name': config.report.team_name,
+                        'generated_date': dates['start_date']
+                    }
+                )
 
-        # Step 7: Generate PDF
-        console.print("\n[bold cyan]Step 6: Creating PDF[/bold cyan]")
+                console.print(f"[green]OK PDF created: {pdf_path}[/green]")
 
-        from services.pdf_generator import generate_pdf_report
-        from utils.filename_utils import generate_report_filename
+                # Success panel
+                console.print(Panel(
+                    f"[green]OK Report generated successfully![/green]\n\n"
+                    f"[bold]Sprint:[/bold] {sprint.name}\n"
+                    f"[bold]PDF:[/bold] {pdf_path}\n"
+                    f"[bold]HTML:[/bold] {str(pdf_path).replace('.pdf', '.html')}",
+                    title="Success",
+                    border_style="green"
+                ))
 
-        try:
-            # Generate safe filename
-            filename = generate_report_filename(sprint.name, sprint.id)
-            pdf_path = config.output.pdf_dir / filename
+                # Auto-open PDF if configured
+                if config.output.auto_open_pdf:
+                    import os
+                    console.print("[dim]Opening PDF...[/dim]")
+                    os.startfile(str(pdf_path))  # Windows
 
-            # Generate PDF
-            generate_pdf_report(
-                markdown_content=final_report,
-                output_path=pdf_path,
-                template_path=config.report.template_path,
-                metadata={
-                    'sprint_name': sprint.name,
-                    'sprint_id': sprint.id,
-                    'team_name': config.report.team_name,
-                    'generated_date': dates['start_date']
-                }
-            )
-
-            console.print(f"[green]OK PDF created: {pdf_path}[/green]")
-
-            # Success panel
-            console.print(Panel(
-                f"[green]OK Report generated successfully![/green]\n\n"
-                f"[bold]Sprint:[/bold] {sprint.name}\n"
-                f"[bold]PDF:[/bold] {pdf_path}\n"
-                f"[bold]HTML:[/bold] {str(pdf_path).replace('.pdf', '.html')}",
-                title="Success",
-                border_style="green"
-            ))
-
-            # Auto-open PDF if configured
-            if config.output.auto_open_pdf:
-                import os
-                console.print("[dim]Opening PDF...[/dim]")
-                os.startfile(str(pdf_path))  # Windows
-
-        except Exception as e:
-            console.print(f"[red]Error creating PDF: {e}[/red]")
-            sys.exit(1)
+            except Exception as e:
+                console.print(f"[red]Error creating PDF: {e}[/red]")
+                sys.exit(1)
+        # JIRA client automatically cleaned up here
 
     except KeyboardInterrupt:
         console.print("\n\n[yellow]Cancelled by user[/yellow]")

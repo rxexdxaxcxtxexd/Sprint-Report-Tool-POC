@@ -141,17 +141,15 @@ class JiraMCPClient:
         self._container_process.stdin.write(json.dumps(initialized_notification) + "\n")
         self._container_process.stdin.flush()
 
-        # Read initialization responses
-        for _ in range(2):  # Expect 2 responses (init + notification)
-            try:
-                response_line = self._container_process.stdout.readline()
-                if not response_line:
-                    break
+        # Read initialization response (only 1 response - notification doesn't get a response)
+        try:
+            response_line = self._container_process.stdout.readline()
+            if response_line:
                 response = json.loads(response_line)
                 if 'error' in response:
                     raise JiraMCPError(f"Initialization error: {response['error']}")
-            except json.JSONDecodeError:
-                continue  # Skip non-JSON lines
+        except json.JSONDecodeError as e:
+            logger.warning(f"Failed to parse initialization response: {e}")
 
     def close(self):
         """Stop persistent container and cleanup."""

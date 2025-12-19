@@ -65,6 +65,13 @@ For more information, see README.md
         version='Sprint Report CLI v1.0.0'
     )
 
+    parser.add_argument(
+        '--sprint',
+        type=int,
+        metavar='SPRINT_ID',
+        help='JIRA sprint ID to generate report for (skips interactive selection)'
+    )
+
     args = parser.parse_args()
 
     try:
@@ -103,7 +110,38 @@ For more information, see README.md
             fathom_client = FathomClient(api_key=config.fathom.api_key)
 
             # Step 1: Select Sprint
-            sprint = select_sprint_interactive(jira_client, board_id)
+            if args.sprint:
+                # Direct sprint ID provided - skip interactive selection
+                console.print(f"\n[bold cyan]Step 1: Fetching Sprint {args.sprint}[/bold cyan]")
+
+                from rich.progress import Progress, TextColumn
+                from utils.exceptions import JiraMCPError
+
+                with Progress(
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console
+                ) as progress:
+                    task = progress.add_task(f"Loading sprint {args.sprint}...", total=None)
+
+                    try:
+                        sprint = jira_client.get_sprint_by_id(args.sprint)
+                        progress.update(task, completed=True)
+                        console.print(f"[green]OK Sprint: {sprint.name} ({sprint.state})[/green]")
+                    except JiraMCPError as e:
+                        progress.stop()
+                        console.print(Panel(
+                            f"[red]Sprint {args.sprint} not found:[/red] {e}\n\n"
+                            "[yellow]Troubleshooting:[/yellow]\n"
+                            "1. Verify sprint ID in JIRA (check sprint URL)\n"
+                            "2. Ensure you have access to this sprint\n"
+                            "3. Try using --board to select interactively",
+                            title="Sprint Not Found",
+                            border_style="red"
+                        ))
+                        sys.exit(1)
+            else:
+                # Interactive selection (existing workflow)
+                sprint = select_sprint_interactive(jira_client, board_id)
 
             # Step 2: Confirm Dates
             dates = confirm_sprint_dates_interactive(sprint)

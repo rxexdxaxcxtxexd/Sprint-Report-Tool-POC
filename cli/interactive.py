@@ -103,7 +103,18 @@ def select_sprint_interactive(jira_client: JiraMCPClient, board_id: int) -> Spri
             sys.exit(1)
 
     if not sprints:
-        console.print("[red]No sprints found on this board[/red]")
+        console.print(Panel(
+            "[yellow]No sprints found on this board[/yellow]\n\n"
+            "[bold]Alternative:[/bold] If you know the sprint ID, you can use:\n"
+            "[dim]  python -m cli.main --sprint <SPRINT_ID>[/dim]\n\n"
+            "[bold]To find sprint ID:[/bold]\n"
+            "[dim]  1. Open sprint in JIRA[/dim]\n"
+            "[dim]  2. Look at URL: .../sprint/<ID>[/dim]\n\n"
+            "[bold]Example:[/bold]\n"
+            "[dim]  python -m cli.main --sprint 2239[/dim]",
+            title="No Sprints Found",
+            border_style="yellow"
+        ))
         sys.exit(1)
 
     # Display sprints table

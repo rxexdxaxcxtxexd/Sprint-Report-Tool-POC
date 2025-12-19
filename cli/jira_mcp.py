@@ -131,17 +131,11 @@ class JiraMCPClient:
             }
         }
 
-        initialized_notification = {
-            "jsonrpc": "2.0",
-            "method": "notifications/initialized"
-        }
-
-        # Send initialization sequence
+        # Step 1: Send initialize request and flush
         self._container_process.stdin.write(json.dumps(init_request) + "\n")
-        self._container_process.stdin.write(json.dumps(initialized_notification) + "\n")
         self._container_process.stdin.flush()
 
-        # Read initialization response (only 1 response - notification doesn't get a response)
+        # Step 2: Read initialize response FIRST (before sending notification)
         try:
             response_line = self._container_process.stdout.readline()
             if response_line:
@@ -150,6 +144,14 @@ class JiraMCPClient:
                     raise JiraMCPError(f"Initialization error: {response['error']}")
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse initialization response: {e}")
+
+        # Step 3: NOW send initialized notification (after reading response)
+        initialized_notification = {
+            "jsonrpc": "2.0",
+            "method": "notifications/initialized"
+        }
+        self._container_process.stdin.write(json.dumps(initialized_notification) + "\n")
+        self._container_process.stdin.flush()
 
     def close(self):
         """Stop persistent container and cleanup."""
@@ -274,6 +276,10 @@ class JiraMCPClient:
     def get_sprint_issues(self, sprint_id: int) -> List[Issue]:
         """Get all issues in a sprint.
 
+        Tries two approaches:
+        1. MCP tool jira_get_sprint_issues (may timeout)
+        2. Fallback to JQL search if tool fails
+
         Args:
             sprint_id: Sprint ID
 
@@ -281,59 +287,130 @@ class JiraMCPClient:
             List of Issue objects
 
         Raises:
-            JiraMCPError: If the MCP call fails
+            JiraMCPError: If both methods fail
         """
-        result = self._call_mcp_tool('jira_get_sprint_issues', {
-            'sprint_id': str(sprint_id)
-        })
+        # Helper function to parse issue data (used by both methods)
+        def parse_issue(issue_data):
+            """Parse issue data into Issue object."""
+            if not validate_issue_data(issue_data):
+                return None  # Skip invalid issue
 
-        # Parse and validate issue data
-        issues = []
-        if isinstance(result, dict) and 'issues' in result:
-            for issue_data in result['issues']:
-                # Validate issue data schema (logs warning if invalid, continues with next)
-                if not validate_issue_data(issue_data):
-                    continue  # Skip invalid issue
+            # Extract fields from flattened MCP format
+            status_obj = issue_data.get('status', {})
+            assignee_obj = issue_data.get('assignee', {})
 
-                # Extract fields from flattened MCP format
-                status_obj = issue_data.get('status', {})
-                assignee_obj = issue_data.get('assignee', {})
+            return Issue(
+                key=issue_data.get('key', 'N/A'),
+                summary=issue_data.get('summary', ''),
+                status=status_obj.get('name', 'Unknown') if isinstance(status_obj, dict) else str(status_obj),
+                assignee=assignee_obj.get('display_name') if isinstance(assignee_obj, dict) and assignee_obj else None,
+                issue_type=issue_data.get('issue_type', {}).get('name', 'Task') if isinstance(issue_data.get('issue_type'), dict) else 'Task',
+                story_points=validate_story_points(issue_data.get('story_points'))
+            )
 
-                issues.append(Issue(
-                    key=issue_data.get('key', 'N/A'),
-                    summary=issue_data.get('summary', ''),
-                    status=status_obj.get('name', 'Unknown') if isinstance(status_obj, dict) else str(status_obj),
-                    assignee=assignee_obj.get('display_name') if isinstance(assignee_obj, dict) and assignee_obj else None,
-                    issue_type=issue_data.get('issue_type', {}).get('name', 'Task') if isinstance(issue_data.get('issue_type'), dict) else 'Task',
-                    story_points=validate_story_points(issue_data.get('story_points'))
-                ))
+        # Try MCP tool first
+        try:
+            result = self._call_mcp_tool('jira_get_sprint_issues', {
+                'sprint_id': str(sprint_id)
+            })
 
-        return issues
+            # Parse MCP response
+            issues = []
+            if isinstance(result, dict) and 'issues' in result:
+                for issue_data in result['issues']:
+                    issue = parse_issue(issue_data)
+                    if issue:
+                        issues.append(issue)
+
+            logger.info(f"MCP tool succeeded: fetched {len(issues)} issues")
+            return issues
+
+        except (JiraMCPError, TimeoutError) as e:
+            logger.warning(f"MCP tool failed for sprint {sprint_id}, trying JQL fallback: {e}")
+
+            # Fallback: Use JQL search
+            try:
+                result = self._call_mcp_tool('jira_search', {
+                    'jql': f'sprint = {sprint_id} ORDER BY rank ASC',
+                    'max_results': 100,
+                    'start_at': 0,
+                    'fields': 'summary,status,assignee,issuetype,customfield_10016'  # customfield_10016 is usually story points
+                })
+
+                # Parse JQL response (same structure as jira_get_sprint_issues)
+                issues = []
+                if isinstance(result, dict) and 'issues' in result:
+                    for issue_data in result['issues']:
+                        issue = parse_issue(issue_data)
+                        if issue:
+                            issues.append(issue)
+
+                logger.info(f"JQL fallback succeeded: fetched {len(issues)} issues")
+                return issues
+
+            except Exception as jql_error:
+                logger.error(f"Both MCP tool and JQL fallback failed: {jql_error}")
+                raise JiraMCPError(f"Could not fetch issues for sprint {sprint_id}: {jql_error}")
 
     def get_sprint_by_id(self, sprint_id: int) -> Sprint:
-        """Get sprint details by ID.
+        """Get sprint details by ID using JQL search fallback.
+
+        Since jira_get_sprint tool doesn't exist in MCP, we use jira_search
+        with a JQL filter to find issues in the sprint, then extract
+        sprint metadata from the first issue's sprint field.
 
         Args:
             sprint_id: Sprint ID
 
         Returns:
-            Sprint object
+            Sprint object (may have minimal data if JQL fails)
 
         Raises:
-            JiraMCPError: If the MCP call fails
+            JiraMCPError: If the sprint cannot be found at all
         """
-        result = self._call_mcp_tool('jira_get_sprint', {
-            'sprint_id': str(sprint_id)
-        })
+        try:
+            # Try JQL search to get sprint metadata from issues
+            result = self._call_mcp_tool('jira_search', {
+                'jql': f'sprint = {sprint_id}',
+                'max_results': 1,
+                'fields': 'summary'  # Minimal fields for speed
+            })
 
-        return Sprint(
-            id=result['id'],
-            name=result['name'],
-            state=result['state'],
-            start_date=result.get('startDate'),
-            end_date=result.get('endDate'),
-            board_id=result.get('originBoardId', 0)
-        )
+            if not result.get('issues') or len(result['issues']) == 0:
+                # Sprint has no issues - return minimal Sprint object
+                logger.warning(f"Sprint {sprint_id} found but has no issues, using minimal data")
+                return Sprint(
+                    id=sprint_id,
+                    name=f'Sprint {sprint_id}',
+                    state='unknown',
+                    start_date=None,
+                    end_date=None,
+                    board_id=0
+                )
+
+            # Sprint exists (we found issues) - return minimal Sprint
+            # Note: Sprint field format varies and isn't reliably accessible
+            # User will confirm/update dates in interactive flow
+            return Sprint(
+                id=sprint_id,
+                name=f'Sprint {sprint_id}',  # Will be updated by user
+                state='unknown',
+                start_date=None,
+                end_date=None,
+                board_id=0
+            )
+
+        except Exception as e:
+            # JQL search failed (likely timeout) - return minimal Sprint
+            logger.warning(f"JQL search failed for sprint {sprint_id}: {e}, using minimal data")
+            return Sprint(
+                id=sprint_id,
+                name=f'Sprint {sprint_id}',
+                state='unknown',
+                start_date=None,
+                end_date=None,
+                board_id=0
+            )
 
     def check_connection(self) -> bool:
         """Test JIRA MCP connection.

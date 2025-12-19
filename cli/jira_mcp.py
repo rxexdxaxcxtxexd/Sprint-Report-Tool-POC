@@ -13,6 +13,8 @@ import logging
 import os
 import atexit
 import random
+import threading
+from queue import Queue, Empty
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 
@@ -22,6 +24,41 @@ from utils.exceptions import JiraMCPError
 
 
 logger = logging.getLogger(__name__)
+
+
+def _read_with_timeout(stream, timeout: float = 30.0) -> Optional[str]:
+    """Read line from stream with timeout.
+
+    Args:
+        stream: File-like object to read from (stdout/stderr)
+        timeout: Timeout in seconds
+
+    Returns:
+        Line read, or None if timeout
+
+    Raises:
+        TimeoutError: If read times out
+    """
+    result_queue = Queue()
+
+    def reader_thread():
+        try:
+            line = stream.readline()
+            result_queue.put(('success', line))
+        except Exception as e:
+            result_queue.put(('error', e))
+
+    thread = threading.Thread(target=reader_thread, daemon=True)
+    thread.start()
+
+    try:
+        status, data = result_queue.get(timeout=timeout)
+        if status == 'error':
+            raise data
+        return data
+    except Empty:
+        # Timeout occurred
+        raise TimeoutError(f"Container did not respond within {timeout} seconds")
 
 
 @dataclass
@@ -77,6 +114,11 @@ class JiraMCPClient:
         self._container_process = None
         self._initialized = False
 
+        # Container health tracking
+        self._container_healthy = True
+        self._consecutive_failures = 0
+        self._max_failures_before_restart = 2
+
         # Register cleanup on exit
         atexit.register(self.close)
 
@@ -115,6 +157,45 @@ class JiraMCPClient:
             self._send_initialization()
             self._initialized = True
 
+    def _check_container_health(self) -> bool:
+        """Check if container is responsive.
+
+        Returns:
+            True if container is healthy, False otherwise
+        """
+        if not self._container_process or self._container_process.poll() is not None:
+            logger.warning("Container process is dead")
+            return False
+
+        # Simple ping test - call tools/list (lightweight)
+        try:
+            ping_request = {
+                "jsonrpc": "2.0",
+                "id": 99999,
+                "method": "tools/list",
+                "params": {}
+            }
+
+            self._container_process.stdin.write(json.dumps(ping_request) + "\n")
+            self._container_process.stdin.flush()
+
+            # Try to read response with short timeout
+            response_line = _read_with_timeout(self._container_process.stdout, timeout=5.0)
+
+            if response_line:
+                logger.debug("Container health check passed")
+                return True
+
+            logger.warning("Container health check failed - no response")
+            return False
+
+        except TimeoutError:
+            logger.warning("Container health check timeout")
+            return False
+        except Exception as e:
+            logger.warning(f"Container health check error: {e}")
+            return False
+
     def _send_initialization(self):
         """Send MCP initialization handshake."""
         init_request = {
@@ -137,11 +218,17 @@ class JiraMCPClient:
 
         # Step 2: Read initialize response FIRST (before sending notification)
         try:
-            response_line = self._container_process.stdout.readline()
+            response_line = _read_with_timeout(
+                self._container_process.stdout,
+                timeout=30.0  # 30 second timeout for initialization
+            )
             if response_line:
                 response = json.loads(response_line)
                 if 'error' in response:
                     raise JiraMCPError(f"Initialization error: {response['error']}")
+        except TimeoutError as e:
+            logger.error(f"MCP initialization timeout: {e}")
+            raise JiraMCPError("MCP container initialization timed out - container may be stuck")
         except json.JSONDecodeError as e:
             logger.warning(f"Failed to parse initialization response: {e}")
 
@@ -170,6 +257,30 @@ class JiraMCPClient:
         # Clean up container
         cleanup_cmd = ['docker', 'rm', '-f', self.container_name]
         subprocess.run(cleanup_cmd, capture_output=True, text=True)
+
+    def _restart_container(self):
+        """Restart MCP container after failure.
+
+        This preserves the container configuration but creates a fresh process.
+        """
+        logger.info("Restarting MCP container due to failure")
+
+        # Close existing container
+        self.close()
+
+        # Wait a moment for cleanup
+        import time
+        time.sleep(2)
+
+        # Reset state
+        self._initialized = False
+        self._container_healthy = True
+        self._consecutive_failures = 0
+
+        # Start fresh container
+        self._ensure_container_running()
+
+        logger.info("MCP container restarted successfully")
 
     def __enter__(self):
         """Context manager entry."""
@@ -213,8 +324,32 @@ class JiraMCPClient:
             self._container_process.stdin.write(json.dumps(tool_request) + "\n")
             self._container_process.stdin.flush()
 
-            # Read response from persistent container
-            response_line = self._container_process.stdout.readline()
+            # Read response from persistent container with timeout
+            try:
+                response_line = _read_with_timeout(
+                    self._container_process.stdout,
+                    timeout=60.0  # 60 second timeout for tool calls
+                )
+            except TimeoutError as e:
+                logger.error(f"MCP tool call timeout for {tool_name}: {e}")
+
+                # Track consecutive failures
+                self._consecutive_failures += 1
+                self._container_healthy = False
+
+                # Auto-restart after multiple failures
+                if self._consecutive_failures >= self._max_failures_before_restart:
+                    logger.warning(f"Container failed {self._consecutive_failures} times, restarting")
+                    try:
+                        self._restart_container()
+                        # Retry the tool call once after restart
+                        logger.info(f"Retrying {tool_name} after container restart")
+                        return self._call_mcp_tool(tool_name, arguments)  # Recursive retry
+                    except Exception as retry_error:
+                        logger.error(f"Retry after restart failed: {retry_error}")
+                        raise JiraMCPError(f"MCP container failed even after restart: {retry_error}")
+
+                raise JiraMCPError(f"MCP container timeout calling {tool_name} - container may be hung")
 
             if not response_line:
                 # Container crashed or closed
@@ -231,6 +366,8 @@ class JiraMCPClient:
             return validate_mcp_response(tool_response)
 
         except Exception as e:
+            # Track failures for any exception
+            self._consecutive_failures += 1
             if isinstance(e, JiraMCPError):
                 raise
             raise JiraMCPError(f"Unexpected error calling MCP: {e}")

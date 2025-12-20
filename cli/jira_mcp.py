@@ -14,6 +14,8 @@ import os
 import atexit
 import random
 import threading
+import sys
+import io
 from queue import Queue, Empty
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
@@ -112,6 +114,8 @@ class JiraMCPClient:
         # Persistent container management
         self.container_name = f"mcp-jira-{os.getpid()}"
         self._container_process = None
+        self._container_stdin = None
+        self._container_stdout = None
         self._initialized = False
 
         # Container health tracking
@@ -142,6 +146,8 @@ class JiraMCPClient:
             self.docker_image
         ]
 
+        # Use default buffering with explicit flush after every write
+        # This is the most reliable approach across platforms
         self._container_process = subprocess.Popen(
             docker_cmd,
             stdin=subprocess.PIPE,
@@ -150,7 +156,10 @@ class JiraMCPClient:
             text=True,
             encoding='utf-8',
             errors='replace'
+            # bufsize=-1 (default) = use system default buffering
         )
+        self._container_stdin = self._container_process.stdin
+        self._container_stdout = self._container_process.stdout
 
         # Send initialization handshake once
         if not self._initialized:
@@ -176,11 +185,11 @@ class JiraMCPClient:
                 "params": {}
             }
 
-            self._container_process.stdin.write(json.dumps(ping_request) + "\n")
-            self._container_process.stdin.flush()
+            self._container_stdin.write(json.dumps(ping_request) + "\n")
+            self._container_stdin.flush()
 
             # Try to read response with short timeout
-            response_line = _read_with_timeout(self._container_process.stdout, timeout=5.0)
+            response_line = _read_with_timeout(self._container_stdout, timeout=5.0)
 
             if response_line:
                 logger.debug("Container health check passed")
@@ -213,13 +222,13 @@ class JiraMCPClient:
         }
 
         # Step 1: Send initialize request and flush
-        self._container_process.stdin.write(json.dumps(init_request) + "\n")
-        self._container_process.stdin.flush()
+        self._container_stdin.write(json.dumps(init_request) + "\n")
+        self._container_stdin.flush()
 
         # Step 2: Read initialize response FIRST (before sending notification)
         try:
             response_line = _read_with_timeout(
-                self._container_process.stdout,
+                self._container_stdout,
                 timeout=30.0  # 30 second timeout for initialization
             )
             if response_line:
@@ -237,13 +246,37 @@ class JiraMCPClient:
             "jsonrpc": "2.0",
             "method": "notifications/initialized"
         }
-        self._container_process.stdin.write(json.dumps(initialized_notification) + "\n")
-        self._container_process.stdin.flush()
+        self._container_stdin.write(json.dumps(initialized_notification) + "\n")
+        self._container_stdin.flush()
+
+        # Step 4: Some MCP servers auto-send tools/list after initialization
+        # Try to consume it if it exists (with short timeout)
+        try:
+            tools_response = _read_with_timeout(self._container_stdout, timeout=2.0)
+            if tools_response:
+                logger.debug(f"Consumed automatic tools/list response: {tools_response[:100]}")
+        except TimeoutError:
+            # No automatic response, that's okay
+            logger.debug("No automatic tools/list response")
+        except Exception as e:
+            logger.warning(f"Error consuming tools/list: {e}")
 
     def close(self):
         """Stop persistent container and cleanup."""
         if self._container_process:
             try:
+                # Close wrapped streams first (Windows)
+                if self._container_stdin and sys.platform == 'win32':
+                    try:
+                        self._container_stdin.close()
+                    except Exception:
+                        pass
+                if self._container_stdout and sys.platform == 'win32':
+                    try:
+                        self._container_stdout.close()
+                    except Exception:
+                        pass
+
                 self._container_process.terminate()
                 self._container_process.wait(timeout=5)
             except Exception:
@@ -251,6 +284,8 @@ class JiraMCPClient:
                 self._container_process.kill()
                 self._container_process.wait()
             finally:
+                self._container_stdin = None
+                self._container_stdout = None
                 self._container_process = None
                 self._initialized = False
 
@@ -321,13 +356,13 @@ class JiraMCPClient:
 
         try:
             # Send tool request to persistent container
-            self._container_process.stdin.write(json.dumps(tool_request) + "\n")
-            self._container_process.stdin.flush()
+            self._container_stdin.write(json.dumps(tool_request) + "\n")
+            self._container_stdin.flush()
 
             # Read response from persistent container with timeout
             try:
                 response_line = _read_with_timeout(
-                    self._container_process.stdout,
+                    self._container_stdout,
                     timeout=60.0  # 60 second timeout for tool calls
                 )
             except TimeoutError as e:

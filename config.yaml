@@ -1,20 +1,24 @@
+# Sprint Report CLI - Configuration Settings
+
 jira:
   default_board_id: 38
   default_project: BOPS
-  boards:
-    38:
-      name: "BOPS Board"
-      project: BOPS
-      url: "https://csgsolutions.atlassian.net/jira/software/c/projects/BOPS/boards/38"
 
 fathom:
-  base_url: "https://api.fathom.video/v1"
+  search_terms: ["ibobs", "ibops", "ibob", "ibop"]
+  date_range_padding_days: 2  # Include 2 days before/after sprint dates
 
-sprint_report:
-  guide_path: "C:\\Users\\layden\\Downloads\\CSG_Customer_Status_Report_Guide.docx"
-  output_dir: "output"
-  pdf_retention_hours: 24
+report:
+  team_name: "iBOPS FY25 Agile Team"
+  guide_path: "guides/csg_sprint_report_guide.md"
+  template_path: "templates/csg_sprint_report_template.html"
 
-email:
-  from_address: "sprint-reports@csgsolutions.com"
-  subject_template: "Sprint {sprint_id} Report - {sprint_name}"
+output:
+  pdf_dir: "output/pdfs"
+  html_dir: "output/html"
+  auto_open_pdf: true  # Automatically open PDF after generation
+
+claude:
+  model: "claude-sonnet-4-5-20250929"
+  max_tokens: 4096
+  temperature: 0.7

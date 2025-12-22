@@ -24,13 +24,10 @@ from pathlib import Path
 from typing import Dict, Any, Optional, Union
 from datetime import datetime
 
-try:
-    from weasyprint import HTML, CSS
-    from weasyprint.text.fonts import FontConfiguration
-    WEASYPRINT_AVAILABLE = True
-except ImportError as e:
-    WEASYPRINT_AVAILABLE = False
-    WEASYPRINT_ERROR = str(e)
+# WeasyPrint is imported lazily inside functions that use it
+# This allows the module to load even if WeasyPrint/GTK3 is not available
+WEASYPRINT_AVAILABLE = None  # None = not yet checked, True = available, False = unavailable
+WEASYPRINT_ERROR = None
 
 from jinja2 import Environment, FileSystemLoader, Template, TemplateNotFound
 import markdown
@@ -62,9 +59,27 @@ def check_weasyprint_availability() -> None:
     """
     Check if WeasyPrint is available and properly configured.
 
+    This function attempts to import WeasyPrint on first call and caches the result.
+    Subsequent calls use the cached result for performance.
+
     Raises:
         WeasyPrintNotAvailableError: If WeasyPrint cannot be imported or is misconfigured
     """
+    global WEASYPRINT_AVAILABLE, WEASYPRINT_ERROR
+
+    # Try importing WeasyPrint if we haven't checked yet
+    if WEASYPRINT_AVAILABLE is None:
+        try:
+            from weasyprint import HTML, CSS
+            from weasyprint.text.fonts import FontConfiguration
+            WEASYPRINT_AVAILABLE = True
+            logger.info("WeasyPrint is available and ready")
+        except ImportError as e:
+            WEASYPRINT_AVAILABLE = False
+            WEASYPRINT_ERROR = str(e)
+            logger.warning(f"WeasyPrint import failed: {e}")
+
+    # Raise error if WeasyPrint is not available
     if not WEASYPRINT_AVAILABLE:
         error_msg = (
             f"WeasyPrint is not available: {WEASYPRINT_ERROR}\n\n"
@@ -234,6 +249,10 @@ def generate_pdf_from_html(
     """
     check_weasyprint_availability()
 
+    # Import WeasyPrint classes (only when PDF generation is actually needed)
+    from weasyprint import HTML, CSS
+    from weasyprint.text.fonts import FontConfiguration
+
     try:
         output_path = Path(output_path)
 
@@ -286,7 +305,7 @@ def generate_pdf_from_html(
 def generate_pdf_from_markdown(
     markdown_content: str,
     output_path: Union[str, Path],
-    template_name: str = 'report_template.html',
+    template_name: str = 'csg_sprint_report_template.html',
     metadata: Optional[Dict[str, Any]] = None,
     save_html: bool = True
 ) -> Dict[str, Path]:

@@ -29,9 +29,10 @@ Example usage:
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Tuple
 from datetime import datetime
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 # Configure module logger
@@ -440,6 +441,76 @@ class FathomClient:
         logger.info(f"Retrieved summary ({len(summary)} characters)")
         return summary
 
+
+    def get_multiple_transcripts_concurrent(
+        self,
+        recording_ids: List[str],
+        max_workers: int = 5
+    ) -> List[Tuple[str, Optional[List[Dict[str, Any]]]]]:
+        """
+        Fetch transcripts for multiple recordings concurrently.
+
+        This method uses ThreadPoolExecutor to fetch transcripts in parallel,
+        dramatically improving performance when fetching multiple transcripts.
+
+        Args:
+            recording_ids: List of recording IDs to fetch
+            max_workers: Maximum number of concurrent requests (default: 5)
+
+        Returns:
+            List of tuples: (recording_id, transcript or None if error)
+            Order matches input recording_ids order
+
+        Example:
+            >>> recording_ids = ['rec_123', 'rec_456', 'rec_789']
+            >>> results = client.get_multiple_transcripts_concurrent(recording_ids)
+            >>> for rec_id, transcript in results:
+            ...     if transcript:
+            ...         print(f"{rec_id}: {len(transcript)} segments")
+            ...     else:
+            ...         print(f"{rec_id}: Failed to fetch")
+            rec_123: 45 segments
+            rec_456: 32 segments
+            rec_789: Failed to fetch
+        """
+        if not recording_ids:
+            return []
+
+        logger.info(f"Fetching {len(recording_ids)} transcripts concurrently (max_workers={max_workers})")
+
+        def fetch_single_transcript(rec_id: str) -> Tuple[str, Optional[List[Dict[str, Any]]]]:
+            """Fetch a single transcript, returning (id, transcript or None)."""
+            try:
+                transcript = self.get_meeting_transcript(rec_id)
+                return (rec_id, transcript)
+            except Exception as e:
+                logger.warning(f"Failed to fetch transcript for {rec_id}: {e}")
+                return (rec_id, None)
+
+        # Use ThreadPoolExecutor for concurrent fetching
+        results = []
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_id = {
+                executor.submit(fetch_single_transcript, rec_id): rec_id
+                for rec_id in recording_ids
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_id):
+                rec_id, transcript = future.result()
+                results.append((rec_id, transcript))
+
+        # Sort results to match input order
+        id_to_transcript = dict(results)
+        ordered_results = [(rec_id, id_to_transcript.get(rec_id)) for rec_id in recording_ids]
+
+        success_count = sum(1 for _, t in ordered_results if t is not None)
+        logger.info(f"Successfully fetched {success_count}/{len(recording_ids)} transcripts")
+
+        return ordered_results
+
+
     def get_sprint_meetings(
         self,
         start_date: str,
@@ -490,9 +561,36 @@ class FathomClient:
         # First, get all meetings in date range
         meetings = self.list_meetings(start_date=start_date, end_date=end_date)
 
-        # Enrich each meeting with transcript and summary
-        enriched_meetings = []
+        # Enrich meetings with transcripts and summaries (using concurrent fetching)
+        if not meetings:
+            return []
 
+        # Extract meeting IDs
+        meeting_ids = [m.get('id') for m in meetings if m.get('id')]
+
+        # Fetch transcripts concurrently if requested
+        transcript_map = {}
+        if include_transcripts and meeting_ids:
+            logger.info(f"Fetching {len(meeting_ids)} transcripts concurrently...")
+            transcript_results = self.get_multiple_transcripts_concurrent(meeting_ids)
+            transcript_map = {rec_id: transcript for rec_id, transcript in transcript_results}
+
+        # Fetch summaries sequentially (TODO: make this concurrent too in future)
+        summary_map = {}
+        if include_summaries and meeting_ids:
+            for meeting_id in meeting_ids:
+                try:
+                    summary = self.get_meeting_summary(meeting_id)
+                    summary_map[meeting_id] = summary
+                except FathomNotFoundError:
+                    logger.warning(f"No summary found for meeting {meeting_id}")
+                    summary_map[meeting_id] = ""
+                except FathomAPIError as e:
+                    logger.error(f"Error fetching summary for {meeting_id}: {e}")
+                    summary_map[meeting_id] = ""
+
+        # Build enriched meetings list
+        enriched_meetings = []
         for meeting in meetings:
             meeting_id = meeting.get('id')
 
@@ -501,29 +599,13 @@ class FathomClient:
                 enriched_meetings.append(meeting)
                 continue
 
-            # Add transcript if requested
+            # Add transcript from concurrent fetch results
             if include_transcripts:
-                try:
-                    transcript = self.get_meeting_transcript(meeting_id)
-                    meeting['transcript'] = transcript
-                except FathomNotFoundError:
-                    logger.warning(f"No transcript found for meeting {meeting_id}")
-                    meeting['transcript'] = []
-                except FathomAPIError as e:
-                    logger.error(f"Error fetching transcript for {meeting_id}: {e}")
-                    meeting['transcript'] = []
+                meeting['transcript'] = transcript_map.get(meeting_id, [])
 
-            # Add summary if requested
+            # Add summary
             if include_summaries:
-                try:
-                    summary = self.get_meeting_summary(meeting_id)
-                    meeting['summary'] = summary
-                except FathomNotFoundError:
-                    logger.warning(f"No summary found for meeting {meeting_id}")
-                    meeting['summary'] = ""
-                except FathomAPIError as e:
-                    logger.error(f"Error fetching summary for {meeting_id}: {e}")
-                    meeting['summary'] = ""
+                meeting['summary'] = summary_map.get(meeting_id, "")
 
             enriched_meetings.append(meeting)
 

@@ -2,6 +2,8 @@
 
 Interactive command-line tool for generating executive-level sprint reports with human-in-the-loop workflow.
 
+> **📦 Note:** This is the **CLI tool implementation**. A FastAPI web service version is available at the [`archive/fastapi-service`](https://github.com/rxexdxaxcxtxexd/Sprint-Report-Tool-POC/tree/archive/fastapi-service) branch for reference. See [IMPLEMENTATIONS.md](IMPLEMENTATIONS.md) for comparison and details.
+
 ## Features
 
 - **Human-in-the-Loop Workflow**: Confirm decisions at each step
